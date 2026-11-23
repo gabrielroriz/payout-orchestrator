@@ -27,12 +27,7 @@ Payout Orchestrator is a backend for performance-based payouts. Tenants send raw
 
 ## Why
 
-More and more companies pay for results instead of hours: creators per view, affiliates per conversion, couriers per delivery, customers per loyalty milestone. Any product like this rests on two hard problems:
-
-1. **Turning performance into money.** Rules run over a stream of events, and the result must stay correct when events arrive duplicated, late or reversed.
-2. **Moving the money.** Each payout provider covers only some countries, currencies and methods, and each fails in its own way. Nobody can be paid twice, and one provider's outage cannot stall everything else.
-
-Take the running example, *"someone visits 10 restaurants → they earn 5% cashback"*. Visit #10 may arrive twice, visit #4 may be refunded after the cashback was paid, and the provider may time out while paying it. The amount has to come out right in every case.
+More and more companies pay for results instead of hours: creators per view, affiliates per conversion, customers per loyalty milestone. They need the amounts to be exact and every payout to happen exactly once, even when events are duplicated or refunded and providers fail. See the [business definition](docs/00-business.md).
 
 ## What it does
 
@@ -47,10 +42,7 @@ It does **not** hold funds or transmit money (licensed providers do that, on its
 
 ## Guarantees
 
-- **Zero duplicate payouts, and zero lost or double-counted earnings.** Correctness beats availability: when in doubt, the system stops and flags.
-- **No single-provider dependency.** When a provider fails, payouts are rerouted instead of stalling the batch.
-- **Full lineage:** payout → ledger entries → earnings → events → rule version.
-- **Determinism:** the same events and rule version always produce the same earnings.
+Zero duplicate payouts, no single-provider dependency, and full lineage from every payout back to its events and rule version.
 
 ## Architecture
 
@@ -86,8 +78,9 @@ There is nothing to run yet. From M0, the full stack (Kafka, Postgres, Grafana a
 
 ## Documentation
 
-- [Project scope](docs/01-scope.md): problem, goals and non-goals, requirements and capacity estimates.
-- [Design](docs/02-design.md): architecture, Kafka topics, rules engine, payout state machine, key decisions and milestones.
+- [Business definition](docs/00-business.md): customer, problem, offer, how a tenant uses it, and the business model.
+- [Project scope](docs/01-scope.md): problem, goals and non-goals, and requirements.
+- [Design](docs/02-design.md): architecture, Kafka topics, rules engine, payout state machine, key decisions and capacity.
 
 ## License
 
