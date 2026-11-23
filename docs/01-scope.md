@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | Draft v0.3 (open for review) |
+| **Status** | Draft v0.4 (open for review) |
 | **Author** | Gabriel Roriz |
 | **Updated** | 2026-11-23 |
 | **See also** | [Business](00-business.md) · [Design](02-design.md) |
@@ -46,7 +46,7 @@ Who the customer is and why they need this is in the [business definition](00-bu
 - **Performance event:** an immutable fact (`visit.completed`) with a client-supplied unique `event_id`.
 - **Program:** a named incentive with one or more immutable **rule versions**. Payees join it through an **enrollment**.
 - **Earning:** money a payee is owed. It may be negative (an adjustment).
-- **Funding account:** the tenant's single balance, held with a licensed partner, that tops up each provider.
+- **Funding account:** the tenant's single balance, held with a licensed partner, that tops up each provider. We record its balance; we never hold the money.
 - **Payout:** an instruction to move money from a payee's balance to one of their payout methods.
 - **Route:** the ordered list of providers eligible for a given payout.
 
@@ -65,17 +65,17 @@ Who the customer is and why they need this is in the [business definition](00-bu
 | FR-09 | A reversal event undoes its original. If the original was already accrued, it produces a negative earning. |
 | FR-10 | Every earning carries its lineage: the contributing events and the rule version. |
 | FR-11 | Every money movement is a balanced double-entry journal entry. Corrections are new entries, never edits. |
-| FR-12 | Payee balances move `pending → available → in_flight → paid`. A negative balance is netted against future earnings. |
-| FR-13 | A payout requires enough funds in the tenant's funding account. |
-| FR-14 | Create payouts on demand. Every mutating call takes an `Idempotency-Key`. |
+| FR-12 | Payee balances move `pending → available → in_flight → paid`. Earnings become `available` when their window and grace period close. A negative balance is netted against future earnings. |
+| FR-13 | The ledger records the tenant's funding balance: deposits increase it, paid payouts decrease it. A payout the balance can't cover is `blocked`, is never sent to a provider, and the tenant is notified. Blocked payouts resume automatically once funds arrive. |
+| FR-14 | Create payouts on demand, for all payees with an `available` balance or for chosen ones. Every mutating call takes an `Idempotency-Key`. |
 | FR-15 | Payouts follow an explicit [state machine](02-design.md#4-payout-state-machine). Every transition is stored with its actor and reason. |
 | FR-16 | Providers sit behind one adapter interface. The MVP ships a fault-injecting simulator and one real sandbox adapter. |
 | FR-17 | Per-tenant routing policies match country, currency and method to an ordered provider list. |
-| FR-18 | Fail over on a definitive rejection or an open circuit breaker. **Never** on an ambiguous outcome until it is resolved. |
+| FR-18 | Fail over on a definitive rejection or an open circuit breaker. **Never** on an ambiguous outcome until it is resolved, and never on a lack of funds. |
 | FR-19 | Track provider status through webhooks, with polling for payouts stuck past an SLA. |
 | FR-20 | Send tenants HMAC-signed webhooks for earnings and payouts, retried with backoff. |
 
-**Later (v1+):** rule backtests, late events as adjustments, scheduled payout cycles, batch approval, payout cancellation, a second provider, provider rate limits and batch APIs, daily reconciliation, and ops tooling for replay and manual resolution.
+**Later (v1+):** rule backtests, late events as adjustments, scheduled payout cycles per program (for example weekly, with a minimum amount), batch approval, payout cancellation, a second provider, provider rate limits and batch APIs, daily reconciliation, and ops tooling for replay and manual resolution.
 
 ## 5. Non-functional requirements
 

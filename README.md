@@ -67,7 +67,7 @@ All services live in one Go module and can run as a single process in developmen
 | Milestone | Exit criteria |
 | --- | --- |
 | **M0** Foundations | `make up` starts the stack, and a test event flows end to end in a single trace |
-| **M1** Money core | Fund a wallet → pay a payee → receive a signed webhook, with the ledger balanced |
+| **M1** Money core | Fund the account → pay a payee → receive a signed webhook, with the ledger balanced. An unfunded payout is blocked, never sent |
 | **M2** Orchestration | Kill a provider in the middle of a 100k batch: 0 duplicates, 0 lost |
 | **M3** Performance engine | 10 restaurant visits, with duplicates, out-of-order events and one refund → exactly 5% cashback paid |
 | **M4** Production-grade | Latency and throughput targets met under load, a clean reconciliation report, Terraform for AWS |

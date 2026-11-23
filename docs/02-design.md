@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | Draft v0.2 (open for review) |
+| **Status** | Draft v0.3 (open for review) |
 | **Author** | Gabriel Roriz |
 | **Updated** | 2026-11-23 |
 | **See also** | [Business](00-business.md) · [Scope](01-scope.md) |
@@ -47,8 +47,8 @@ flowchart LR
 | --- | --- | --- |
 | `api` | Public REST API, authentication, idempotency, event ingest | API keys, idempotency records |
 | `rules-engine` | Consumes events, evaluates rules, emits earnings | Window aggregates, processed event ids |
-| `ledger` | Double-entry book of record: balances and holds (gRPC) | The journal, the **source of truth** |
-| `payouts` | Payout lifecycle and compliance gate | The payout state machine |
+| `ledger` | Double-entry book of record: payee and funding balances, holds (gRPC) | The journal, the **source of truth** |
+| `payouts` | Payout lifecycle, compliance and funding gate, payout schedules (later) | The payout state machine |
 | `dispatcher` | Routing, provider adapters, circuit breakers, provider webhooks and polling | Provider attempts |
 | `notifier` | Signed outbound webhooks with retries | Delivery log |
 
@@ -99,8 +99,8 @@ For each event, the engine skips it if its `event_id` was already processed, upd
 stateDiagram-v2
     direction LR
     [*] --> requested
-    requested --> blocked: KYC pending or no funds
-    blocked --> requested: resolved
+    requested --> blocked: KYC pending or insufficient funds
+    blocked --> requested: verified or funded
     requested --> held: ledger hold placed
     held --> canceled
     held --> submitted: provider accepted
@@ -143,6 +143,8 @@ stateDiagram-v2
 
    The provider idempotency key is derived from `(payout, provider)`. An `unknown` payout is rerouted only after the provider confirms it holds no transfer for that key.
 
+7. **The funding balance is a ledger account, not custody.** A confirmed deposit credits it. Placing a payout hold reserves the amount from it, `paid` debits it, and `failed` or `canceled` releases it. Earnings never touch it. If a provider reports a lack of funds anyway, the payout goes back to `blocked`, not to the next route.
+
 ## 6. Capacity and durability
 
 | Dimension | Assumption | Consequence |
@@ -158,4 +160,5 @@ Kafka runs with RF=3, `min.insync.replicas=2`, `acks=all` and idempotent produce
 
 1. Which provider sandboxes can we realistically get (Wise, PayPal, Dots, Stripe Connect)?
 2. Who triggers `pending → available` when a window plus its grace period closes?
-3. Which ledger accounts does an earning post against, and when is the funding account debited?
+3. Which ledger account does an earning post against before it is funded?
+4. How are deposits confirmed: reported by the tenant, or confirmed by the funding partner?
