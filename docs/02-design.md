@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | Draft v0.3 (open for review) |
+| **Status** | Draft v0.4 (open for review) |
 | **Author** | Gabriel Roriz |
 | **Updated** | 2026-11-23 |
 | **See also** | [Business](00-business.md) · [Scope](01-scope.md) |
@@ -68,30 +68,68 @@ Payloads are versioned Protobuf, checked with `buf breaking` in CI.
 
 ## 3. Rules engine
 
-Programs are data, with [CEL](https://github.com/google/cel-go) filters, so changing one needs no deploy. The running example:
+The first version supports **creator programs only**, since creator platforms are the first segment (see [business](00-business.md)). Other segments, such as cashback or affiliates, come later and reuse the same engine with new building blocks.
+
+Programs are data, with [CEL](https://github.com/google/cel-go) filters, so changing one needs no deploy.
+
+### Creator events
+
+| Event | Meaning |
+| --- | --- |
+| `post.published` | A creator published a post (post id, platform, campaign, `published_at`) |
+| `post.metrics_snapshot` | The post's **cumulative** metrics at a point in time (views, likes, …) |
+| `post.removed` | The post was deleted or flagged as fraud |
+
+The tenant tracks the metrics and sends snapshots; we never read social platforms ourselves.
+
+### Building blocks
+
+| Block | Options in v1 |
+| --- | --- |
+| Measure | Latest value of a metric per post (`max`, since snapshots are cumulative), or a count of posts |
+| Window | Per post, for N days after `published_at` |
+| Threshold | Minimum value before anything is paid, for example 10,000 views |
+| Reward | `per_unit` (for example per 1,000 views), `fixed` per post, or tiers |
+| Cap | Per post, per creator per cycle, and a total program budget (required) |
+| Settlement | The cycle after which earnings become `available`, for example `weekly` |
+
+### Example
+
+ClipCo pays $2 per 1,000 views on TikTok and YouTube posts, for 30 days after publishing, up to $500 per post:
 
 ```yaml
-program: foodie-cashback
+program: clipco-views
 version: 1
-effective_from: 2026-11-01T00:00:00Z
+effective_from: 2026-12-01T00:00:00Z
 trigger:
-  event: visit.completed
-  filter: event.merchant.category == "restaurant"   # CEL
+  event: post.metrics_snapshot
+  filter: event.post.platform in ["tiktok", "youtube"]   # CEL
 aggregate:
-  window: calendar_month
+  group_by: event.post.id
+  measure: max(event.metrics.views)
+  window: { per: post, length: 30d }
   grace_period: 72h
-  measure: count_distinct(event.merchant.id)
-threshold: 10
 reward:
-  type: percent_of_sum
-  field: event.amount
-  rate: "0.05"
-  rounding: half_even
-  cap: { amount: 5000, currency: USD }              # minor units = $50.00
-settlement: on_window_close
+  type: per_unit
+  unit: 1000
+  rate: { amount: 200, currency: USD }                    # minor units = $2.00
+  rounding: down
+cap:
+  per_post: { amount: 50000, currency: USD }              # $500
+  budget: { amount: 10000000, currency: USD }             # $100,000
+settlement: weekly
 ```
 
-For each event, the engine skips it if its `event_id` was already processed, updates the aggregate for every matching `(rule version, payee, window)`, and emits the difference between the reward now implied and what was already accrued (decision 5).
+### How an event is processed
+
+1. Skip it if its `event_id` was already processed.
+2. Skip it if it falls outside the post's window plus the grace period.
+3. Update the post's aggregate. Because the measure is `max`, a snapshot that arrives out of order and is lower than one already seen changes nothing.
+4. Emit the difference between the reward now implied and what was already accrued for that post (decision 5).
+
+For example, snapshots of 12k, then 9k (late), then 30k views produce earnings of +$24, nothing, then +$36. A later snapshot of 400k views would add only $440, because the post hits its $500 cap. A `post.removed` inside the window drops the post's reward to zero, which emits a negative earning for everything accrued so far (a clawback).
+
+Earnings stay `pending` until their settlement cycle plus the grace period closes, then become `available`.
 
 ## 4. Payout state machine
 
