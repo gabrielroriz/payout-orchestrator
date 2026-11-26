@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -17,8 +16,7 @@ func Healthcheck(env config.Environment, version string, logger *slog.Logger) ht
 			"version": version,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(data); err != nil {
+		if err := writeJSON(w, http.StatusOK, data); err != nil {
 			logger.Error("write healthcheck response", "error", err)
 		}
 	}
