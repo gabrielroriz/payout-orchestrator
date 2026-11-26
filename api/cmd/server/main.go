@@ -9,7 +9,6 @@ import (
 
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/app"
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/config"
-	"github.com/gabrielroriz/payout-orchestrator/api/internal/httpserver"
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/routes"
 	"github.com/gabrielroriz/payout-orchestrator/shared/logger"
 )
@@ -45,15 +44,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	app.Logger.Info("app running", "env", cfg.Env, "version", cfg.Version)
-
 	// After the first signal, stop listening so a second Ctrl+C kills the process at once.
 	context.AfterFunc(ctx, stop)
 
-	// Blocks until a signal arrives and the server has finished shutting down.
-	if err := httpserver.Run(ctx, cfg.Port, app.Logger, app.Routes); err != nil {
-		app.Logger.Error("server stopped with error", "error", err)
+	// Blocks until a signal arrives and the application has shut down.
+	if err := app.Run(ctx); err != nil {
+		app.Logger.Error("app stopped with error", "error", err)
 		os.Exit(1)
 	}
-	// then close the DB pool, etc., in reverse order of creation
 }
