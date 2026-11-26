@@ -45,6 +45,7 @@ func main() {
 	}
 
 	// After the first signal, stop listening so a second Ctrl+C kills the process at once.
+	// A second Ctrl+C usually means "force quit", including on a production box.
 	context.AfterFunc(ctx, stop)
 
 	// Blocks until a signal arrives and the application has shut down.
