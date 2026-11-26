@@ -17,6 +17,7 @@ import (
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 func TestRunServesUntilContextIsCanceled(t *testing.T) {
+	// --- Arrange ---
 	// Open a port for the server and create the context that will stop it.
 	ln := listen(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -31,21 +32,21 @@ func TestRunServesUntilContextIsCanceled(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, ln, discard, h) }()
 
+	// --- Act ---
 	// Send a request; it waits in the port's queue until Run accepts it.
-	resp, err := http.Get(url(ln))
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
+	status := get(url(ln))
 
+	// --- Assert ---
 	// Check that our handler produced the response.
-	if resp.StatusCode != http.StatusTeapot {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusTeapot)
+	if status != http.StatusTeapot {
+		t.Errorf("status = %d, want %d", status, http.StatusTeapot)
 	}
 
+	// --- Act ---
 	// Ask the server to stop, as Ctrl+C would.
 	cancel()
 
+	// --- Assert ---
 	// Run must return nil, meaning it stopped cleanly.
 	if err := receive(t, done, "Run to return"); err != nil {
 		t.Fatalf("Run() = %v, want nil", err)
@@ -53,6 +54,7 @@ func TestRunServesUntilContextIsCanceled(t *testing.T) {
 }
 
 func TestRunLetsInFlightRequestsFinish(t *testing.T) {
+	// --- Arrange ---
 	// Open a port for the server and create the context that will stop it.
 	ln := listen(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -72,9 +74,11 @@ func TestRunLetsInFlightRequestsFinish(t *testing.T) {
 	// Wait until the request is inside the handler, so it is truly in flight.
 	receive(t, arrived, "the request to reach the handler")
 
+	// --- Act ---
 	// Start shutting down while that request is still running.
 	cancel()
 
+	// --- Assert ---
 	// Run must keep waiting, because the request has not finished yet.
 	select {
 	case err := <-done:
@@ -88,9 +92,11 @@ func TestRunLetsInFlightRequestsFinish(t *testing.T) {
 		t.Error("new connection accepted during shutdown, want it refused")
 	}
 
+	// --- Act ---
 	// Let the handler finish its response.
 	close(release)
 
+	// --- Assert ---
 	// The in-flight request must succeed despite the shutdown.
 	if got := receive(t, status, "the response"); got != http.StatusOK {
 		t.Errorf("status = %d, want %d", got, http.StatusOK)
@@ -103,6 +109,7 @@ func TestRunLetsInFlightRequestsFinish(t *testing.T) {
 }
 
 func TestRunGivesUpWhenShutdownTakesTooLong(t *testing.T) {
+	// --- Arrange ---
 	// Shorten the shutdown timeout so the test runs fast, and restore it afterwards.
 	original := shutdownTimeout
 	shutdownTimeout = 100 * time.Millisecond
@@ -127,9 +134,11 @@ func TestRunGivesUpWhenShutdownTakesTooLong(t *testing.T) {
 	// Wait until the request is inside the handler, so it is truly in flight.
 	receive(t, arrived, "the request to reach the handler")
 
+	// --- Act ---
 	// Start shutting down while that request is still running.
 	cancel()
 
+	// --- Assert ---
 	// Run must give up after the timeout and report it as an error.
 	if err := receive(t, done, "Run to return"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Run() = %v, want %v", err, context.DeadlineExceeded)
@@ -137,6 +146,7 @@ func TestRunGivesUpWhenShutdownTakesTooLong(t *testing.T) {
 }
 
 func TestRunSendsServerErrorsToTheLogger(t *testing.T) {
+	// --- Arrange ---
 	// Write logs to a buffer instead of discarding them, so the test can read them.
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
@@ -155,12 +165,17 @@ func TestRunSendsServerErrorsToTheLogger(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- Run(ctx, ln, logger, h) }()
 
+	// --- Act ---
 	// Trigger the panic; the request itself fails because the server drops the connection.
 	get(url(ln))
 
 	// Stop the server and wait, so every log line is written before the test reads them.
 	cancel()
-	if err := receive(t, done, "Run to return"); err != nil {
+	err := receive(t, done, "Run to return")
+
+	// --- Assert ---
+	// The server must have stopped cleanly.
+	if err != nil {
 		t.Fatalf("Run() = %v, want nil", err)
 	}
 
@@ -171,6 +186,7 @@ func TestRunSendsServerErrorsToTheLogger(t *testing.T) {
 }
 
 func TestRunFailsWhenListenerFails(t *testing.T) {
+	// --- Arrange ---
 	// Open a port and close it at once, so every attempt to accept a connection fails.
 	ln := listen(t)
 	ln.Close()
@@ -179,8 +195,12 @@ func TestRunFailsWhenListenerFails(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Run must return the listener's error.
+	// --- Act ---
+	// Run the server on the broken listener.
 	err := Run(ctx, ln, discard, http.NotFoundHandler())
+
+	// --- Assert ---
+	// Run must return the listener's error.
 	if !errors.Is(err, net.ErrClosed) {
 		t.Fatalf("Run() = %v, want %v", err, net.ErrClosed)
 	}

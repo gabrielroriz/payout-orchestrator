@@ -15,6 +15,7 @@ import (
 
 // TestRunServesTheAPI checks the whole stack over real HTTP: routes, handlers and server.
 func TestRunServesTheAPI(t *testing.T) {
+	// --- Arrange ---
 	// Build the config and a logger that throws its output away.
 	cfg := config.Config{Env: config.Development, Version: "test"}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -39,6 +40,7 @@ func TestRunServesTheAPI(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- app.Run(ctx, ln) }()
 
+	// --- Act ---
 	// Call the healthcheck over real HTTP.
 	resp, err := http.Get("http://" + ln.Addr().String() + "/v1/healthcheck")
 	if err != nil {
@@ -46,14 +48,17 @@ func TestRunServesTheAPI(t *testing.T) {
 	}
 	resp.Body.Close()
 
+	// --- Assert ---
 	// The route must exist and answer successfully.
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 
+	// --- Act ---
 	// Ask the app to stop.
 	cancel()
 
+	// --- Assert ---
 	// Run must return nil within 5 seconds, meaning it stopped cleanly.
 	select {
 	case err := <-done:
