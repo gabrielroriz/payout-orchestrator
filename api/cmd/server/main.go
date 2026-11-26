@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -44,12 +45,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Open the port here so a failure, such as the port being in use, stops startup at once.
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
+	if err != nil {
+		app.Logger.Error("cannot listen on port", "port", cfg.Port, "error", err)
+		os.Exit(1)
+	}
+
 	// After the first signal, stop listening so a second Ctrl+C kills the process at once.
 	// A second Ctrl+C usually means "force quit", including on a production box.
 	context.AfterFunc(ctx, stop)
 
 	// Blocks until a signal arrives and the application has shut down.
-	if err := app.Run(ctx); err != nil {
+	if err := app.Run(ctx, ln); err != nil {
 		app.Logger.Error("app stopped with error", "error", err)
 		os.Exit(1)
 	}

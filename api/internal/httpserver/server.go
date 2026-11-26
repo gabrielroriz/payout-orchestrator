@@ -4,18 +4,19 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 )
 
 // shutdownTimeout is how long in-flight requests get to finish once shutdown starts.
-const shutdownTimeout = 15 * time.Second
+// It is a variable only so tests can shorten it.
+var shutdownTimeout = 15 * time.Second
 
-// Run serves h on the given port until ctx is canceled, then shuts down gracefully.
-// It blocks until the server has fully stopped.
-func Run(ctx context.Context, port int, logger *slog.Logger, h http.Handler) error {
+// Run serves h on ln until ctx is canceled, then shuts down gracefully.
+// It blocks until the server has fully stopped, and always closes ln.
+func Run(ctx context.Context, ln net.Listener, logger *slog.Logger, h http.Handler) error {
 	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           h,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
@@ -24,18 +25,18 @@ func Run(ctx context.Context, port int, logger *slog.Logger, h http.Handler) err
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 
-	// ListenAndServe blocks, so run it in the background and report how it ended.
+	// Serve blocks, so run it in the background and report how it ended.
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("starting server", "addr", srv.Addr)
-		serverErr <- srv.ListenAndServe()
+		logger.Info("starting server", "addr", ln.Addr().String())
+		serverErr <- srv.Serve(ln)
 	}()
 
 	// Wait until either the server has stopped or the context is canceled.
 	select {
 	case err := <-serverErr:
-		// The server never started, for example because the port is in use.
-		return fmt.Errorf("start server: %w", err)
+		// The server stopped on its own, for example because the listener failed.
+		return fmt.Errorf("serve: %w", err)
 	case <-ctx.Done():
 		// The context was canceled, so the server should shut down gracefully.
 	}

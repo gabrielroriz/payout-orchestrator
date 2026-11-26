@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/config"
@@ -19,12 +20,12 @@ func NewApplication(cfg config.Config, logger *slog.Logger, routes http.Handler)
 	return &Application{Config: cfg, Logger: logger, Routes: routes}, nil
 }
 
-// Run serves the API until ctx is canceled, then shuts everything down.
+// Run serves the API on ln until ctx is canceled, then shuts everything down.
 // It blocks until the server has stopped and every resource is released.
-func (app *Application) Run(ctx context.Context) error {
+func (app *Application) Run(ctx context.Context, ln net.Listener) error {
 	app.Logger.Info("app running", "env", app.Config.Env, "version", app.Config.Version)
 
-	if err := httpserver.Run(ctx, app.Config.Port, app.Logger, app.Routes); err != nil {
+	if err := httpserver.Run(ctx, ln, app.Logger, app.Routes); err != nil {
 		return err
 	}
 
