@@ -10,6 +10,7 @@ import (
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/app"
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/config"
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/httpserver"
+	"github.com/gabrielroriz/payout-orchestrator/api/internal/routes"
 	"github.com/gabrielroriz/payout-orchestrator/shared/logger"
 )
 
@@ -28,13 +29,16 @@ func main() {
 	}
 	cfg.Version = version
 
+	log := logger.New(logger.Options{
+		Application: "api",
+		Level:       cfg.LogLevel,
+		JSON:        cfg.Env == config.Production,
+	})
+
 	app, err := app.NewApplication(
 		cfg,
-		logger.New(logger.Options{
-			Application: "api",
-			Level:       cfg.LogLevel,
-			JSON:        cfg.Env == config.Production,
-		}),
+		log,
+		routes.New(cfg, log),
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -47,7 +51,7 @@ func main() {
 	context.AfterFunc(ctx, stop)
 
 	// Blocks until a signal arrives and the server has finished shutting down.
-	if err := httpserver.Run(ctx, cfg.Port, app.Logger, app.Routes()); err != nil {
+	if err := httpserver.Run(ctx, cfg.Port, app.Logger, app.Routes); err != nil {
 		app.Logger.Error("server stopped with error", "error", err)
 		os.Exit(1)
 	}

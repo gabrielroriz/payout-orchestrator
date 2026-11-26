@@ -1,4 +1,4 @@
-package app
+package routes
 
 import (
 	"io"
@@ -11,11 +11,7 @@ import (
 )
 
 func TestRoutes(t *testing.T) {
-	app, err := NewApplication(config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	routes := app.Routes()
+	routes := New(config.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	tests := []struct {
 		method, path string
