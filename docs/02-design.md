@@ -52,7 +52,7 @@ flowchart LR
 | `dispatcher` | Routing, provider adapters, circuit breakers, provider webhooks and polling | Provider attempts |
 | `notifier` | Signed outbound webhooks with retries | Delivery log |
 
-All services live in one Go module (`cmd/<service>`) and can run as a single process in development.
+All services live in one Go module, with one top-level folder per service (`<service>/cmd`, `<service>/internal`) and code used by several services in `shared/`. Each service builds to its own binary, and all of them can run as a single process in development.
 
 ## 2. Kafka topics
 
