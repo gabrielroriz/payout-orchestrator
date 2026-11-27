@@ -3,15 +3,16 @@ package httpserver
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // discard is a logger that throws its output away, for tests that ignore logs.
@@ -39,9 +40,7 @@ func TestRunServesUntilContextIsCanceled(t *testing.T) {
 
 	// --- Assert ---
 	// Check that our handler produced the response.
-	if status != http.StatusTeapot {
-		t.Errorf("status = %d, want %d", status, http.StatusTeapot)
-	}
+	assert.Equal(t, http.StatusTeapot, status)
 
 	// --- Act ---
 	// Ask the server to stop, as Ctrl+C would.
@@ -49,9 +48,7 @@ func TestRunServesUntilContextIsCanceled(t *testing.T) {
 
 	// --- Assert ---
 	// Run must return nil, meaning it stopped cleanly.
-	if err := receive(t, done, "Run to return"); err != nil {
-		t.Fatalf("Run() = %v, want nil", err)
-	}
+	require.NoError(t, receive(t, done, "Run to return"), "Run")
 }
 
 func TestRunLetsInFlightRequestsFinish(t *testing.T) {
@@ -83,15 +80,16 @@ func TestRunLetsInFlightRequestsFinish(t *testing.T) {
 	// Run must keep waiting, because the request has not finished yet.
 	select {
 	case err := <-done:
-		t.Fatalf("Run() = %v before the in-flight request finished", err)
+		require.Failf(t, "Run returned early", "Run() = %v before the in-flight request finished", err)
 	case <-time.After(100 * time.Millisecond):
 	}
 
 	// Meanwhile, the server must refuse new connections.
-	if conn, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second); err == nil {
+	conn, err := net.DialTimeout("tcp", ln.Addr().String(), time.Second)
+	if err == nil {
 		conn.Close()
-		t.Error("new connection accepted during shutdown, want it refused")
 	}
+	assert.Error(t, err, "new connection accepted during shutdown, want it refused")
 
 	// --- Act ---
 	// Let the handler finish its response.
@@ -99,14 +97,10 @@ func TestRunLetsInFlightRequestsFinish(t *testing.T) {
 
 	// --- Assert ---
 	// The in-flight request must succeed despite the shutdown.
-	if got := receive(t, status, "the response"); got != http.StatusOK {
-		t.Errorf("status = %d, want %d", got, http.StatusOK)
-	}
+	assert.Equal(t, http.StatusOK, receive(t, status, "the response"))
 
 	// With no requests left, Run must return nil.
-	if err := receive(t, done, "Run to return"); err != nil {
-		t.Fatalf("Run() = %v, want nil", err)
-	}
+	require.NoError(t, receive(t, done, "Run to return"), "Run")
 }
 
 func TestRunGivesUpWhenShutdownTakesTooLong(t *testing.T) {
@@ -141,9 +135,7 @@ func TestRunGivesUpWhenShutdownTakesTooLong(t *testing.T) {
 
 	// --- Assert ---
 	// Run must give up after the timeout and report it as an error.
-	if err := receive(t, done, "Run to return"); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Run() = %v, want %v", err, context.DeadlineExceeded)
-	}
+	require.ErrorIs(t, receive(t, done, "Run to return"), context.DeadlineExceeded)
 }
 
 func TestRunSendsServerErrorsToTheLogger(t *testing.T) {
@@ -176,14 +168,10 @@ func TestRunSendsServerErrorsToTheLogger(t *testing.T) {
 
 	// --- Assert ---
 	// The server must have stopped cleanly.
-	if err != nil {
-		t.Fatalf("Run() = %v, want nil", err)
-	}
+	require.NoError(t, err, "Run")
 
 	// The panic must appear in our logger as an Error-level record.
-	if !strings.Contains(logs.String(), `level=ERROR msg="http: panic serving`) {
-		t.Errorf("panic not logged at Error level; logs:\n%s", logs.String())
-	}
+	assert.Contains(t, logs.String(), `level=ERROR msg="http: panic serving`)
 }
 
 func TestRunFailsWhenListenerFails(t *testing.T) {
@@ -202,18 +190,16 @@ func TestRunFailsWhenListenerFails(t *testing.T) {
 
 	// --- Assert ---
 	// Run must return the listener's error.
-	if !errors.Is(err, net.ErrClosed) {
-		t.Fatalf("Run() = %v, want %v", err, net.ErrClosed)
-	}
+	require.ErrorIs(t, err, net.ErrClosed)
 }
 
 // listen opens a listener on a free local port.
 func listen(t *testing.T) net.Listener {
 	t.Helper()
+
+	// Port 0 lets the system pick a free port.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return ln
 }
 
@@ -239,6 +225,7 @@ func holdingHandler() (h http.Handler, arrived, release chan struct{}) {
 	release = make(chan struct{})
 	var once sync.Once
 	h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Signal the first arrival, then wait for the test to let the request finish.
 		once.Do(func() { close(arrived) })
 		<-release
 		w.WriteHeader(http.StatusOK)
@@ -253,7 +240,7 @@ func receive[T any](t *testing.T, ch <-chan T, what string) T {
 	case v := <-ch:
 		return v
 	case <-time.After(5 * time.Second):
-		t.Fatalf("timed out waiting for %s", what)
+		require.FailNow(t, "timed out waiting for "+what)
 		var zero T
 		return zero
 	}

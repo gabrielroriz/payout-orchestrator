@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/httpjson"
 )
 
@@ -39,14 +42,10 @@ func TestRecoverPassesThrough(t *testing.T) {
 
 	// --- Assert ---
 	// The handler's response must reach the client unchanged.
-	if rec.Code != http.StatusNoContent {
-		t.Errorf("status = %d, want 204", rec.Code)
-	}
+	assert.Equal(t, http.StatusNoContent, rec.Code)
 
 	// Nothing went wrong, so nothing must be logged.
-	if buf.Len() != 0 {
-		t.Errorf("log = %q, want empty", buf.String())
-	}
+	assert.Empty(t, buf.String())
 }
 
 func TestRecoverBeforeResponse(t *testing.T) {
@@ -69,42 +68,22 @@ func TestRecoverBeforeResponse(t *testing.T) {
 
 	// --- Assert ---
 	// The client must get a 500 with a JSON error body.
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want 500", rec.Code)
-	}
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
 	var body httpjson.ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatalf("decode body: %v", err)
-	}
-	want := httpjson.ErrorDetail{Code: httpjson.CodeInternal, Message: "internal server error"}
-	if body.Error != want {
-		t.Errorf("error = %+v, want %+v", body.Error, want)
-	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body), "decode body")
+	assert.Equal(t, httpjson.ErrorDetail{Code: httpjson.CodeInternal, Message: "internal server error"}, body.Error)
 
 	// The headers meant for the unfinished response must be gone.
-	if got := rec.Header().Get("Content-Length"); got != "" {
-		t.Errorf("Content-Length = %q, want it dropped", got)
-	}
-	if got := rec.Header().Get("Content-Type"); got != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", got)
-	}
+	assert.Empty(t, rec.Header().Get("Content-Length"))
+	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 
 	// The request ID must survive, so the client can still quote it.
-	if got := rec.Header().Get(RequestIDHeader); got != "req-1" {
-		t.Errorf("%s = %q, want req-1", RequestIDHeader, got)
-	}
+	assert.Equal(t, "req-1", rec.Header().Get(RequestIDHeader))
 
 	// The panic must be logged at error level with its value, a stack trace and the path.
 	line := decodeLogLine(t, buf)
-	if line["level"] != "ERROR" || line["msg"] != "panic" || line["panic"] != "boom" {
-		t.Errorf("log = %v, want an ERROR panic line for boom", line)
-	}
-	if stack, _ := line["stack"].(string); stack == "" {
-		t.Error("log has no stack trace")
-	}
-	if line["path"] != "/v1/payouts" {
-		t.Errorf("log path = %v, want /v1/payouts", line["path"])
-	}
+	assert.Subset(t, line, map[string]any{"level": "ERROR", "msg": "panic", "panic": "boom", "path": "/v1/payouts"})
+	assert.NotEmpty(t, line["stack"], "log has no stack trace")
 }
 
 func TestRecoverLogsRequestID(t *testing.T) {
@@ -121,9 +100,7 @@ func TestRecoverLogsRequestID(t *testing.T) {
 
 	// --- Assert ---
 	// The panic log must carry the request ID, so it can be matched to the client's report.
-	if got := decodeLogLine(t, buf)["request_id"]; got != "req-42" {
-		t.Errorf("request_id = %v, want req-42", got)
-	}
+	assert.Equal(t, "req-42", decodeLogLine(t, buf)["request_id"])
 }
 
 func TestRecoverAfterResponseStarted(t *testing.T) {
@@ -142,14 +119,10 @@ func TestRecoverAfterResponseStarted(t *testing.T) {
 
 	// --- Assert ---
 	// The status was already sent, so the response must be aborted instead.
-	if v != http.ErrAbortHandler {
-		t.Errorf("escaped panic = %v, want http.ErrAbortHandler", v)
-	}
+	assert.Equal(t, http.ErrAbortHandler, v)
 
 	// The original panic must still be logged.
-	if got := decodeLogLine(t, buf)["panic"]; got != "boom" {
-		t.Errorf("log panic = %v, want boom", got)
-	}
+	assert.Equal(t, "boom", decodeLogLine(t, buf)["panic"])
 }
 
 func TestRecoverLetsAbortThrough(t *testing.T) {
@@ -168,14 +141,10 @@ func TestRecoverLetsAbortThrough(t *testing.T) {
 
 	// --- Assert ---
 	// The deliberate abort must reach net/http unchanged.
-	if v != http.ErrAbortHandler {
-		t.Errorf("escaped panic = %v, want http.ErrAbortHandler", v)
-	}
+	assert.Equal(t, http.ErrAbortHandler, v)
 
 	// A deliberate abort is not a bug, so nothing must be logged.
-	if buf.Len() != 0 {
-		t.Errorf("log = %q, want empty", buf.String())
-	}
+	assert.Empty(t, buf.String())
 }
 
 func TestRecoverReusesWrappedWriter(t *testing.T) {
@@ -197,7 +166,5 @@ func TestRecoverReusesWrappedWriter(t *testing.T) {
 
 	// --- Assert ---
 	// The handler must receive that same writer, not a second wrapper.
-	if got != ww {
-		t.Error("handler got a new wrapper, want the existing wrapper")
-	}
+	assert.Same(t, ww, got)
 }

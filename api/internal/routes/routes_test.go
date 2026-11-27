@@ -10,6 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/config"
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/middleware"
 )
@@ -42,9 +45,7 @@ func TestRoutes(t *testing.T) {
 
 			// --- Assert ---
 			// The router must answer with the expected status code.
-			if rec.Code != tt.want {
-				t.Fatalf("status = %d, want %d", rec.Code, tt.want)
-			}
+			assert.Equal(t, tt.want, rec.Code)
 		})
 	}
 }
@@ -67,9 +68,7 @@ func TestRoutesLimitBody(t *testing.T) {
 
 	// --- Assert ---
 	// The router must refuse the body before the route handles it.
-	if rec.Code != http.StatusRequestEntityTooLarge {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
-	}
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
 }
 
 func TestRoutesLogRequests(t *testing.T) {
@@ -89,14 +88,10 @@ func TestRoutesLogRequests(t *testing.T) {
 	// --- Assert ---
 	// Exactly one JSON log line must have been written.
 	var line map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
-		t.Fatalf("decode log line %q: %v", buf.String(), err)
-	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &line), "decode log line %q", buf.String())
 
 	// It must record the 413, which proves logging wraps the body limit.
-	if line["msg"] != "request" || line["status"] != float64(http.StatusRequestEntityTooLarge) {
-		t.Errorf("log = %v, want a request line with status 413", line)
-	}
+	assert.Subset(t, line, map[string]any{"msg": "request", "status": float64(http.StatusRequestEntityTooLarge)})
 }
 
 func TestRoutesSetRequestID(t *testing.T) {
@@ -111,9 +106,7 @@ func TestRoutesSetRequestID(t *testing.T) {
 
 	// --- Assert ---
 	// The response must carry a generated request ID.
-	if got := rec.Header().Get(middleware.RequestIDHeader); got == "" {
-		t.Errorf("%s header is missing", middleware.RequestIDHeader)
-	}
+	assert.NotEmpty(t, rec.Header().Get(middleware.RequestIDHeader))
 }
 
 func TestRouterRecoversPanic(t *testing.T) {
@@ -136,27 +129,17 @@ func TestRouterRecoversPanic(t *testing.T) {
 
 	// --- Assert ---
 	// The client must get a 500.
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want 500", rec.Code)
-	}
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
 
 	// Two log lines must follow: the panic from Recover, then the request from LogRequests.
 	dec := json.NewDecoder(&buf)
 	var panicLine, requestLine map[string]any
-	if err := dec.Decode(&panicLine); err != nil {
-		t.Fatalf("decode panic line: %v", err)
-	}
-	if err := dec.Decode(&requestLine); err != nil {
-		t.Fatalf("decode request line: %v", err)
-	}
+	require.NoError(t, dec.Decode(&panicLine), "decode panic line")
+	require.NoError(t, dec.Decode(&requestLine), "decode request line")
 
 	// The panic line must carry the request ID, which proves RequestID runs before Recover.
-	if panicLine["msg"] != "panic" || panicLine["request_id"] != "req-9" {
-		t.Errorf("panic line = %v, want msg panic with request_id req-9", panicLine)
-	}
+	assert.Subset(t, panicLine, map[string]any{"msg": "panic", "request_id": "req-9"})
 
 	// The request line must record the 500, which proves LogRequests wraps Recover.
-	if requestLine["msg"] != "request" || requestLine["status"] != float64(http.StatusInternalServerError) {
-		t.Errorf("request line = %v, want msg request with status 500", requestLine)
-	}
+	assert.Subset(t, requestLine, map[string]any{"msg": "request", "status": float64(http.StatusInternalServerError)})
 }

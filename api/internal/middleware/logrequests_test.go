@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // captureLogger returns a JSON logger that writes into the returned buffer, so a test can decode the line the middleware logged.
@@ -20,9 +23,7 @@ func decodeLogLine(t *testing.T, buf *bytes.Buffer) map[string]any {
 	t.Helper()
 
 	var line map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
-		t.Fatalf("decode log line %q: %v", buf.String(), err)
-	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &line), "decode log line %q", buf.String())
 	return line
 }
 
@@ -45,32 +46,23 @@ func TestLogRequests(t *testing.T) {
 
 	// --- Assert ---
 	// The response must reach the client unchanged.
-	if rec.Code != http.StatusCreated || rec.Body.String() != "hello" {
-		t.Fatalf("response = %d %q, want 201 \"hello\"", rec.Code, rec.Body.String())
-	}
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, "hello", rec.Body.String())
 
 	// The log line must describe the request at info level, without the query string.
 	line := decodeLogLine(t, buf)
-	want := map[string]any{
+	assert.Subset(t, line, map[string]any{
 		"level":  "INFO",
 		"msg":    "request",
 		"method": "POST",
 		"path":   "/v1/payouts",
 		"status": float64(201),
 		"bytes":  float64(5),
-	}
-	for k, v := range want {
-		if line[k] != v {
-			t.Errorf("log[%q] = %v, want %v", k, line[k], v)
-		}
-	}
+	})
 
 	// The duration and remote address must be present.
-	for _, k := range []string{"duration", "remote_addr"} {
-		if _, ok := line[k]; !ok {
-			t.Errorf("log is missing %q", k)
-		}
-	}
+	assert.Contains(t, line, "duration")
+	assert.Contains(t, line, "remote_addr")
 }
 
 func TestLogRequestsDefaultsToOK(t *testing.T) {
@@ -87,9 +79,7 @@ func TestLogRequestsDefaultsToOK(t *testing.T) {
 
 	// --- Assert ---
 	// The log must report 200, which is what net/http sends in that case.
-	if got := decodeLogLine(t, buf)["status"]; got != float64(http.StatusOK) {
-		t.Errorf("status = %v, want 200", got)
-	}
+	assert.Equal(t, float64(http.StatusOK), decodeLogLine(t, buf)["status"])
 }
 
 func TestLogRequestsKeepsFirstStatus(t *testing.T) {
@@ -107,9 +97,7 @@ func TestLogRequestsKeepsFirstStatus(t *testing.T) {
 
 	// --- Assert ---
 	// The log must report the status that was actually sent.
-	if got := decodeLogLine(t, buf)["status"]; got != float64(http.StatusAccepted) {
-		t.Errorf("status = %v, want 202", got)
-	}
+	assert.Equal(t, float64(http.StatusAccepted), decodeLogLine(t, buf)["status"])
 }
 
 func TestLogRequestsServerErrorLevel(t *testing.T) {
@@ -126,9 +114,7 @@ func TestLogRequestsServerErrorLevel(t *testing.T) {
 
 	// --- Assert ---
 	// A server error must be logged at error level.
-	if got := decodeLogLine(t, buf)["level"]; got != "ERROR" {
-		t.Errorf("level = %v, want ERROR", got)
-	}
+	assert.Equal(t, "ERROR", decodeLogLine(t, buf)["level"])
 }
 
 func TestLogRequestsIncludesRequestID(t *testing.T) {
@@ -145,7 +131,5 @@ func TestLogRequestsIncludesRequestID(t *testing.T) {
 
 	// --- Assert ---
 	// The log line must carry the request ID.
-	if got := decodeLogLine(t, buf)["request_id"]; got != "req-7" {
-		t.Errorf("request_id = %v, want req-7", got)
-	}
+	assert.Equal(t, "req-7", decodeLogLine(t, buf)["request_id"])
 }

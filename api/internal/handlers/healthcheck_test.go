@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/config"
 )
 
@@ -26,9 +28,5 @@ func TestHealthcheck(t *testing.T) {
 
 	// Each field must hold the value the handler was built with.
 	want := map[string]string{"status": "available", "env": "development", "version": "test"}
-	for k, v := range want {
-		if body[k] != v {
-			t.Errorf("body[%q] = %q, want %q", k, body[k], v)
-		}
-	}
+	assert.Equal(t, want, body)
 }

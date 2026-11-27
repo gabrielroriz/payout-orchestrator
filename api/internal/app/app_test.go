@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/config"
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/routes"
 )
@@ -22,15 +25,11 @@ func TestRunServesTheAPI(t *testing.T) {
 
 	// Build the app with the real routes, just as main does.
 	app, err := NewApplication(cfg, logger, routes.New(cfg, logger))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Open a free local port; the test can read its address from ln.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	// Create the context that will stop the app, standing in for Ctrl+C.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -43,16 +42,12 @@ func TestRunServesTheAPI(t *testing.T) {
 	// --- Act ---
 	// Call the healthcheck over real HTTP.
 	resp, err := http.Get("http://" + ln.Addr().String() + "/v1/healthcheck")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	resp.Body.Close()
 
 	// --- Assert ---
 	// The route must exist and answer successfully.
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// --- Act ---
 	// Ask the app to stop.
@@ -62,10 +57,8 @@ func TestRunServesTheAPI(t *testing.T) {
 	// Run must return nil within 5 seconds, meaning it stopped cleanly.
 	select {
 	case err := <-done:
-		if err != nil {
-			t.Fatalf("Run() = %v, want nil", err)
-		}
+		require.NoError(t, err, "Run")
 	case <-time.After(5 * time.Second):
-		t.Fatal("Run did not return after the context was canceled")
+		require.Fail(t, "Run did not return after the context was canceled")
 	}
 }

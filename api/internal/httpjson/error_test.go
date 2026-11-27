@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestError(t *testing.T) {
@@ -22,11 +25,6 @@ func TestError(t *testing.T) {
 
 	// The body must be an ErrorResponse holding the code and the message.
 	var body ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatalf("decode body: %v", err)
-	}
-	want := ErrorDetail{Code: "invalid_amount", Message: "amount is required"}
-	if body.Error != want {
-		t.Errorf("error = %+v, want %+v", body.Error, want)
-	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body), "decode body")
+	assert.Equal(t, ErrorDetail{Code: "invalid_amount", Message: "amount is required"}, body.Error)
 }

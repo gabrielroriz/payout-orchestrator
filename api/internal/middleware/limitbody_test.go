@@ -2,12 +2,14 @@ package middleware
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/gabrielroriz/payout-orchestrator/api/internal/httpjson"
 )
@@ -40,12 +42,8 @@ func TestLimitBodyAllowsSmallBody(t *testing.T) {
 
 	// --- Assert ---
 	// The handler must read the full body without error.
-	if readErr != nil {
-		t.Fatalf("read body: %v", readErr)
-	}
-	if got != "0123456789" {
-		t.Errorf("body = %q, want %q", got, "0123456789")
-	}
+	require.NoError(t, readErr, "read body")
+	assert.Equal(t, "0123456789", got)
 }
 
 func TestLimitBodyRejectsDeclaredOversizeBody(t *testing.T) {
@@ -66,22 +64,13 @@ func TestLimitBodyRejectsDeclaredOversizeBody(t *testing.T) {
 
 	// --- Assert ---
 	// The middleware must answer 413 itself, as a JSON error.
-	if rec.Code != http.StatusRequestEntityTooLarge {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
-	}
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
 	var body httpjson.ErrorResponse
-	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
-		t.Fatalf("decode body: %v", err)
-	}
-	want := httpjson.ErrorDetail{Code: httpjson.CodeBodyTooLarge, Message: "request body too large"}
-	if body.Error != want {
-		t.Errorf("error = %+v, want %+v", body.Error, want)
-	}
+	require.NoError(t, json.NewDecoder(rec.Body).Decode(&body), "decode body")
+	assert.Equal(t, httpjson.ErrorDetail{Code: httpjson.CodeBodyTooLarge, Message: "request body too large"}, body.Error)
 
 	// The wrapped handler must never run.
-	if called {
-		t.Error("handler ran, want it skipped")
-	}
+	assert.False(t, called, "handler ran, want it skipped")
 }
 
 func TestLimitBodyCapsUndeclaredOversizeBody(t *testing.T) {
@@ -103,7 +92,5 @@ func TestLimitBodyCapsUndeclaredOversizeBody(t *testing.T) {
 	// --- Assert ---
 	// Reading past the limit must fail with *http.MaxBytesError.
 	var maxErr *http.MaxBytesError
-	if !errors.As(readErr, &maxErr) {
-		t.Fatalf("read error = %v, want *http.MaxBytesError", readErr)
-	}
+	assert.ErrorAs(t, readErr, &maxErr)
 }

@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // serveWithRequestID sends a request through RequestID and returns the ID the next handler saw, plus the response.
@@ -20,6 +23,7 @@ func serveWithRequestID(incoming string) (seen string, rec *httptest.ResponseRec
 	if incoming != "" {
 		req.Header.Set(RequestIDHeader, incoming)
 	}
+
 	// Run the request and capture the response.
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -34,19 +38,13 @@ func TestRequestIDGeneratesID(t *testing.T) {
 
 	// --- Assert ---
 	// The handler must find a generated ID in the context.
-	if first == "" {
-		t.Fatal("no request ID in context")
-	}
+	require.NotEmpty(t, first, "no request ID in context")
 
 	// The same ID must be sent back to the client.
-	if got := rec.Header().Get(RequestIDHeader); got != first {
-		t.Errorf("response header = %q, want %q", got, first)
-	}
+	assert.Equal(t, first, rec.Header().Get(RequestIDHeader))
 
 	// Each request must get its own ID.
-	if first == second {
-		t.Errorf("two requests got the same ID %q", first)
-	}
+	assert.NotEqual(t, first, second, "two requests got the same ID")
 }
 
 func TestRequestIDReusesValidClientID(t *testing.T) {
@@ -56,14 +54,10 @@ func TestRequestIDReusesValidClientID(t *testing.T) {
 
 	// --- Assert ---
 	// The handler must see the client's ID.
-	if seen != "tenant-abc_123.4" {
-		t.Errorf("context ID = %q, want the client's ID", seen)
-	}
+	assert.Equal(t, "tenant-abc_123.4", seen)
 
 	// The client must get its own ID back.
-	if got := rec.Header().Get(RequestIDHeader); got != "tenant-abc_123.4" {
-		t.Errorf("response header = %q, want the client's ID", got)
-	}
+	assert.Equal(t, "tenant-abc_123.4", rec.Header().Get(RequestIDHeader))
 }
 
 func TestRequestIDReplacesUnsafeClientID(t *testing.T) {
@@ -87,14 +81,11 @@ func TestRequestIDReplacesUnsafeClientID(t *testing.T) {
 
 			// --- Assert ---
 			// The handler must get a fresh, non-empty ID instead.
-			if seen == "" || seen == tt.id {
-				t.Errorf("context ID = %q, want a generated ID", seen)
-			}
+			assert.NotEmpty(t, seen)
+			assert.NotEqual(t, tt.id, seen)
 
 			// The client must be told the ID that was actually used.
-			if got := rec.Header().Get(RequestIDHeader); got != seen {
-				t.Errorf("response header = %q, want %q", got, seen)
-			}
+			assert.Equal(t, seen, rec.Header().Get(RequestIDHeader))
 		})
 	}
 }
@@ -110,9 +101,7 @@ func TestRequestIDAcceptsMaxLength(t *testing.T) {
 
 	// --- Assert ---
 	// An ID at the limit must still be reused.
-	if seen != id {
-		t.Errorf("context ID was replaced, want the client's ID kept")
-	}
+	assert.Equal(t, id, seen)
 }
 
 func TestRequestIDFromEmptyContext(t *testing.T) {
@@ -122,7 +111,5 @@ func TestRequestIDFromEmptyContext(t *testing.T) {
 
 	// --- Assert ---
 	// There is no ID, so the result must be empty.
-	if got != "" {
-		t.Errorf("RequestIDFrom() = %q, want empty", got)
-	}
+	assert.Empty(t, got)
 }

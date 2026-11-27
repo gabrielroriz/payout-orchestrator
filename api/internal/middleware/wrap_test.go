@@ -4,6 +4,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // writeCase is a sequence of calls a handler makes, with the status and header state they must leave behind.
@@ -49,14 +52,10 @@ func TestWrapTracksResponse(t *testing.T) {
 
 			// --- Assert ---
 			// statusOf must report the status the client received.
-			if got := statusOf(ww); got != tt.wantStatus {
-				t.Errorf("statusOf() = %d, want %d", got, tt.wantStatus)
-			}
+			assert.Equal(t, tt.wantStatus, statusOf(ww), "statusOf")
 
 			// headerSent must match whether that status has gone out.
-			if got := headerSent(ww); got != tt.wantSent {
-				t.Errorf("headerSent() = %v, want %v", got, tt.wantSent)
-			}
+			assert.Equal(t, tt.wantSent, headerSent(ww), "headerSent")
 		})
 	}
 }
@@ -74,14 +73,10 @@ func TestWrapCountsBytes(t *testing.T) {
 
 	// --- Assert ---
 	// The count must cover both parts.
-	if got := ww.BytesWritten(); got != 11 {
-		t.Errorf("BytesWritten() = %d, want 11", got)
-	}
+	assert.Equal(t, 11, ww.BytesWritten())
 
 	// The client must receive the body unchanged.
-	if got := inner.Body.String(); got != "hello world" {
-		t.Errorf("body = %q, want %q", got, "hello world")
-	}
+	assert.Equal(t, "hello world", inner.Body.String())
 }
 
 func TestWrapReusesExistingWrapper(t *testing.T) {
@@ -96,9 +91,7 @@ func TestWrapReusesExistingWrapper(t *testing.T) {
 
 	// --- Assert ---
 	// The same wrapper must come back, so both middleware share one status.
-	if second != first {
-		t.Error("wrap returned a new wrapper, want the existing one")
-	}
+	assert.Same(t, first, second)
 }
 
 func TestWrapKeepsFlush(t *testing.T) {
@@ -110,16 +103,12 @@ func TestWrapKeepsFlush(t *testing.T) {
 	// --- Act ---
 	// Flush through the wrapper, as a streaming handler would.
 	flusher, ok := ww.(http.Flusher)
-	if !ok {
-		t.Fatal("wrapper does not implement http.Flusher")
-	}
+	require.True(t, ok, "wrapper does not implement http.Flusher")
 	flusher.Flush()
 
 	// --- Assert ---
 	// The flush must reach the original writer.
-	if !inner.Flushed {
-		t.Error("original writer was not flushed")
-	}
+	assert.True(t, inner.Flushed, "original writer was not flushed")
 }
 
 func TestWrapUnwrap(t *testing.T) {
@@ -134,7 +123,5 @@ func TestWrapUnwrap(t *testing.T) {
 
 	// --- Assert ---
 	// It must be the recorder, so http.ResponseController can reach it.
-	if got != inner {
-		t.Errorf("Unwrap() = %v, want the original writer", got)
-	}
+	assert.Same(t, inner, got)
 }
