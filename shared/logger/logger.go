@@ -1,15 +1,17 @@
 package logger
 
 import (
+	"io"
 	"log/slog"
 	"os"
 )
 
 // Options configures a logger; each service fills it from its own config.
 type Options struct {
-	Application string // api, rules-engine, …
-	Level       string // debug, info, warn or error; info when empty or invalid
-	JSON        bool   // JSON for production; text is easier to read locally
+	Application string    // api, rules-engine, …
+	Level       string    // debug, info, warn or error; info when empty or invalid
+	JSON        bool      // JSON for production; text is easier to read locally
+	Output      io.Writer // where lines go; stdout when nil
 }
 
 // New returns a structured logger tagged with the service and application names.
@@ -23,13 +25,19 @@ func New(opts Options) *slog.Logger {
 	}
 	handlerOpts := &slog.HandlerOptions{Level: level}
 
+	// Write to stdout unless the caller, such as a test, gives another writer.
+	out := opts.Output
+	if out == nil {
+		out = os.Stdout
+	}
+
 	// Pick the output format: JSON for machines in production, text for people locally.
 	var h slog.Handler
 
 	if opts.JSON {
-		h = slog.NewJSONHandler(os.Stdout, handlerOpts)
+		h = slog.NewJSONHandler(out, handlerOpts)
 	} else {
-		h = slog.NewTextHandler(os.Stdout, handlerOpts) // readable locally
+		h = slog.NewTextHandler(out, handlerOpts) // readable locally
 	}
 
 	// Tag every line with where it came from.
