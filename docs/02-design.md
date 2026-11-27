@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | Draft v0.5 (open for review) |
+| **Status** | Draft v0.6 (open for review) |
 | **Author** | Gabriel Roriz |
 | **Updated** | 2026-11-27 |
 | **See also** | [Business](00-business.md) · [Scope](01-scope.md) |
@@ -84,12 +84,15 @@ Programs are data, with [CEL](https://github.com/google/cel-go) filters, so chan
 
 | Block | Options in v1 |
 | --- | --- |
-| Measure | Latest value of a metric per post (`max`, since snapshots are cumulative), or a count of posts |
+| Filter | A CEL expression on the event, for example only TikTok and YouTube posts |
+| Measure | Latest value of a metric per post (`max`, since snapshots are cumulative) |
 | Window | Per post, for N days after `published_at` |
 | Threshold | Minimum value before anything is paid, for example 10,000 views |
-| Reward | `per_unit` (for example per 1,000 views), `fixed` per post, or tiers |
-| Cap | Per post, per creator per cycle, and a total program budget (required) |
+| Reward | `per_unit` (for example per 1,000 views), `fixed` per post once the threshold is met, or tiers |
+| Cap | Per post and per creator per cycle (exact), and a total program budget (required, soft: see decision 3) |
 | Settlement | The cycle after which earnings become `available`, for example `weekly` |
+
+Enrollment is separate from the rule: an enrollment can carry a CEL eligibility filter on the payee (FR-06).
 
 ### Example
 
@@ -121,9 +124,10 @@ settlement: weekly
 ### How an event is processed
 
 1. Skip it if its `event_id` was already processed.
-2. Skip it if it falls outside the post's window plus the grace period.
-3. Update the post's aggregate. Because the measure is `max`, a snapshot that arrives out of order and is lower than one already seen changes nothing.
-4. Emit the difference between the reward now implied and what was already accrued for that post (decision 5).
+2. Skip it if the payee is not enrolled in the program. Skip a snapshot if the program's budget is spent; a `post.removed` is always processed, so clawbacks still apply.
+3. Skip it if it falls outside the post's window plus the grace period.
+4. Update the post's aggregate. Because the measure is `max`, a snapshot that arrives out of order and is lower than one already seen changes nothing.
+5. Emit the difference between the reward now implied and what was already accrued for that post (decision 5).
 
 For example, snapshots of 12k, then 9k (late), then 30k views produce earnings of +$24, nothing, then +$36. A later snapshot of 400k views would add only $440, because the post hits its $500 cap. A `post.removed` inside the window drops the post's reward to zero, which emits a negative earning for everything accrued so far (a clawback).
 
@@ -138,7 +142,7 @@ stateDiagram-v2
     requested --> blocked: KYC pending or insufficient funds
     blocked --> requested: verified or funded
     requested --> held: ledger hold placed
-    held --> canceled
+    held --> canceled: by the tenant (later)
     held --> submitted: provider accepted
     submitted --> paid: provider confirmed
     submitted --> unknown: timeout or 5xx
@@ -146,6 +150,7 @@ stateDiagram-v2
     unknown --> held: confirmed not created, reroute
     submitted --> held: rejected, next route exists
     submitted --> failed: rejected, no route left
+    submitted --> blocked: provider reports insufficient funds
     paid --> returned: bank return
     paid --> [*]
     failed --> [*]
@@ -157,9 +162,9 @@ stateDiagram-v2
 
 1. **Postgres is the bank; Kafka is the nervous system.** Balances live only in the ledger database. Kafka carries replayable facts, published through a **transactional outbox** (no dual writes).
 2. **Effectively-once = at-least-once delivery + idempotency.** Each consumer records the processed message id in the same transaction as its side effect.
-3. **Partition by payee.** One consumer owns a payee's aggregates and postings at a time, so there are no distributed locks (NFR-05).
+3. **Partition by payee.** One consumer owns a payee's aggregates and postings at a time, so there are no distributed locks (NFR-05). Per-post and per-creator caps are therefore exact. The program budget is the one limit shared across payees, so it is soft: the ledger tracks each program's accrued total and marks the program spent when it reaches the budget, the rules-engine then stops accruing for it, and the tenant is notified. Events already in flight still land, so a program can overshoot its budget by a few earnings.
 4. **Money is `int64` minor units plus an ISO-4217 code.** Rule math uses decimals with explicit rounding. No floats.
-5. **Earnings are deltas, not totals:** `reward(current window state) − already accrued`. Retries, late events and reversals all converge on the right number.
+5. **Earnings are deltas, not totals:** `reward(current window state) − already accrued`. Retries, late snapshots and removed posts all converge on the right number.
 6. **Failover never acts on an ambiguous outcome** (FR-18). Each adapter classifies every outcome:
 
    ```go
@@ -179,7 +184,7 @@ stateDiagram-v2
 
    The provider idempotency key is derived from `(payout, provider)`. An `unknown` payout is rerouted only after the provider confirms it holds no transfer for that key.
 
-7. **The funding balance is a ledger account, not custody.** A confirmed deposit credits it. Placing a payout hold reserves the amount from it, `paid` debits it, and `failed` or `canceled` releases it. Earnings never touch it. If a provider reports a lack of funds anyway, the payout goes back to `blocked`, not to the next route.
+7. **The funding balance is a ledger account, not custody.** A confirmed deposit credits it. Placing a payout hold reserves the amount from it, `paid` debits it, and `failed` or `canceled` releases it. Earnings never touch it. If a provider reports a lack of funds anyway, the payout goes back to `blocked` and its hold is released, instead of moving to the next route.
 
 ## 6. Capacity and durability
 
@@ -195,6 +200,7 @@ Kafka runs with RF=3, `min.insync.replicas=2`, `acks=all` and idempotent produce
 ## 7. Open questions
 
 1. Which provider sandboxes can we realistically get (Wise, PayPal, Dots, Stripe Connect)?
-2. Who triggers `pending → available` when a window plus its grace period closes?
+2. Who triggers `pending → available` when a settlement cycle plus its grace period closes?
 3. Which ledger account does an earning post against before it is funded?
 4. How are deposits confirmed: reported by the tenant, or confirmed by the funding partner?
+5. How does the rules-engine learn that a program's budget is spent: a topic from the ledger, or a read before each emit?

@@ -2,7 +2,7 @@
 
 | | |
 | --- | --- |
-| **Status** | Draft v0.3 (open for review) |
+| **Status** | Draft v0.4 (open for review) |
 | **Author** | Gabriel Roriz |
 | **Updated** | 2026-11-27 |
 | **Next** | [Scope](01-scope.md) · [Design](02-design.md) |
@@ -25,7 +25,7 @@ Within the tenant, three groups use the product:
 
 - **Growth / creator partnerships** designs the programs: what is rewarded, and how much.
 - **Engineering** integrates the API: it sends post events and metrics, and handles webhooks.
-- **Finance / ops** funds the account, triggers payouts and reads statements.
+- **Finance / ops** funds the account, triggers payouts and reconciles them against the ledger.
 
 The creators being paid (**payees**) are the tenant's users. They never deal with us directly.
 
@@ -48,7 +48,7 @@ That is months of payments engineering, unrelated to the tenant's product, and e
 | Pay the right amount | Exact money math, with duplicate and late metrics, and removed posts, handled automatically |
 | Pay creators anywhere | One API in front of several payout providers |
 | Never stall, never pay twice | Automatic failover between providers, safe against duplicates |
-| Satisfy finance and audit | A double-entry ledger, statements, and full lineage from payout to event |
+| Satisfy finance and audit | A double-entry ledger, statements (later), and full lineage from payout to event |
 | Stay informed | Signed webhooks for earnings and payouts |
 
 What we deliberately leave out is listed in the [scope's non-goals](01-scope.md#2-goals-and-non-goals).
@@ -61,8 +61,8 @@ Example: *ClipCo*, a fictional creator platform, pays creators $2 for every 1,00
 2. **ClipCo's engineers create the program** through our API. We validate it against the platform limits; there is no manual approval from us.
 3. **A creator joins** from inside ClipCo. ClipCo registers the creator with us as a payee and enrolls them in the program.
 4. **ClipCo sends view counts** as events. We apply the rule and record what each creator earned, first as `pending`.
-5. **The program's window closes** (for example, the week ends). Earnings become `available`, after a grace period for late metrics and removed posts.
-6. **ClipCo's finance team funds one account** and pays out, by clicking a button or on the program's schedule.
+5. **The program's settlement cycle closes** (for example, the week ends). Earnings become `available`, after a grace period for late metrics and removed posts.
+6. **ClipCo's finance team funds one account** and pays out by clicking a button. Later, payouts can also run on the program's schedule.
 7. **We pay each creator** through the best provider for their country and method, exactly once, and notify ClipCo.
 
 Creators see only ClipCo. We are the engine underneath, the way a payment processor sits under a checkout page.
@@ -72,9 +72,9 @@ Creators see only ClipCo. We are the engine underneath, the way a payment proces
 | The tenant decides | The platform enforces |
 | --- | --- |
 | Which programs to run, and their terms (thresholds, rates, caps, windows) | Programs are built only from a fixed set of rule building blocks |
-| Which creators join each program | Caps and budgets are required, and usage limits apply per tenant |
-| When to pay out: on demand, or on the program's schedule | Payees must be verified, and the funding balance must cover the payout |
-| Their routing preferences (cost or speed) | Payouts go only through providers that support the route |
+| Which creators join each program | Caps and budgets are required, and rate limits apply per tenant |
+| When to pay out: on demand, and later on the program's schedule | Payees must be verified, and the funding balance must cover the payout |
+| Their routing policy: which providers to use, in what order, per country, currency and method | Payouts go only through providers that support the route |
 
 For logic the building blocks cannot express, tenants can calculate amounts themselves and post them as direct earnings, which then follow the same ledger and payout path.
 
@@ -143,5 +143,4 @@ Consumer cashback, with millions of small payouts, would need a different cost a
 
 1. Which licensed partner holds the funding account, and how fast can it top up each provider?
 2. What volume tiers and price per payout?
-3. Which creator metrics come first: views, posts or campaigns?
-4. Should a program be able to pay each earning as soon as it is available, instead of in cycles?
+3. Should a program be able to pay each earning as soon as it is available, instead of in cycles?
