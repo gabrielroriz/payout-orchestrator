@@ -23,7 +23,7 @@ Pay creators for their results, exactly once, across many payout providers.
 
 Payout Orchestrator is a payouts backend for creator and influencer platforms. Platforms send what their creators achieve, such as a published post or a post's view count. Declarative rules turn those events into earnings, a double-entry ledger records every cent, and payouts are routed across several providers with failover that never pays anyone twice.
 
-> **Status:** design phase, no code yet. The [documentation](#documentation) is a first draft, open for review.
+> **Status:** early development (M0). The `api` service runs with a healthcheck, request IDs, request logging, panic recovery and JSON errors. Kafka, Postgres and the other services are not built yet. The [documentation](#documentation) is a first draft, open for review.
 
 ## Tech stack
 
@@ -49,7 +49,18 @@ Payout Orchestrator is a payouts backend for creator and influencer platforms. P
 
 ## Getting started
 
-There is nothing to run yet. From M0, the full stack (Kafka, Postgres, Grafana and every service) will start locally with one command, `make up`, on Docker Compose.
+Requires Go 1.27 or later. Run the `api` service and check its health:
+
+```sh
+go run ./api/cmd/server
+curl localhost:8089/v1/healthcheck
+```
+
+It reads `APP_ENV` (`development` or `production`, default `development`), `PORT` (default `8089`) and `LOG_LEVEL` from the environment.
+
+Run the tests with `go test ./...`.
+
+By the end of M0, the full stack (Kafka, Postgres, Grafana and every service) will start locally with one command, `make up`, on Docker Compose.
 
 ## Documentation
 
