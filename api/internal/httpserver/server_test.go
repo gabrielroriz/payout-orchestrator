@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+// discard is a logger that throws its output away, for tests that ignore logs.
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 func TestRunServesUntilContextIsCanceled(t *testing.T) {

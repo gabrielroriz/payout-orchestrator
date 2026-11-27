@@ -9,12 +9,10 @@ import (
 	"time"
 )
 
-// shutdownTimeout is how long in-flight requests get to finish once shutdown starts.
-// It is a variable only so tests can shorten it.
+// shutdownTimeout is how long in-flight requests get to finish once shutdown starts; tests shorten it.
 var shutdownTimeout = 15 * time.Second
 
-// Run serves h on ln until ctx is canceled, then shuts down gracefully.
-// It blocks until the server has fully stopped, and always closes ln.
+// Run serves h on ln until ctx is canceled, then shuts down gracefully and closes ln.
 func Run(ctx context.Context, ln net.Listener, logger *slog.Logger, h http.Handler) error {
 	srv := &http.Server{
 		Handler:           h,
