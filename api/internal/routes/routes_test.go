@@ -116,13 +116,14 @@ func TestRoutesSetRequestID(t *testing.T) {
 	}
 }
 
-func TestWithMiddlewareRecoversPanic(t *testing.T) {
+func TestRouterRecoversPanic(t *testing.T) {
 	// --- Arrange ---
-	// Wrap a handler that panics in the full middleware chain, logging into a buffer.
+	// Build the shared router, logging into a buffer, and add a route that panics.
 	var buf bytes.Buffer
-	h := withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := newRouter(slog.New(slog.NewJSONHandler(&buf, nil)))
+	h.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		panic("boom")
-	}), slog.New(slog.NewJSONHandler(&buf, nil)))
+	})
 
 	// Build a request with a fixed request ID, to find it in the logs.
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
