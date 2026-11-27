@@ -1,19 +1,21 @@
 package middleware
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gabrielroriz/payout-orchestrator/api/internal/httpjson"
 )
 
 // limit is the body cap every test in this file applies.
 const limit = 10
 
-// readBodyHandler returns a handler that reads the whole request body and
-// stores the outcome in *got and *err, so a test can inspect what it saw.
+// readBodyHandler returns a handler that reads the whole request body and stores the outcome in *got and *err, so a test can inspect what it saw.
 func readBodyHandler(got *string, err *error) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, e := io.ReadAll(r.Body)
@@ -63,9 +65,17 @@ func TestLimitBodyRejectsDeclaredOversizeBody(t *testing.T) {
 	h.ServeHTTP(rec, req)
 
 	// --- Assert ---
-	// The middleware must answer 413 itself.
+	// The middleware must answer 413 itself, as a JSON error.
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
+	}
+	var body httpjson.ErrorResponse
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	want := httpjson.ErrorDetail{Code: httpjson.CodeBodyTooLarge, Message: "request body too large"}
+	if body.Error != want {
+		t.Errorf("error = %+v, want %+v", body.Error, want)
 	}
 
 	// The wrapped handler must never run.
@@ -81,8 +91,7 @@ func TestLimitBodyCapsUndeclaredOversizeBody(t *testing.T) {
 	var readErr error
 	h := LimitBody(limit)(readBodyHandler(&got, &readErr))
 
-	// Build an oversized request and hide its length, as a chunked upload would,
-	// so the middleware cannot reject it up front.
+	// Build an oversized request and hide its length, as a chunked upload would, so the middleware cannot reject it up front.
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("0123456789x"))
 	req.ContentLength = -1
 	rec := httptest.NewRecorder()

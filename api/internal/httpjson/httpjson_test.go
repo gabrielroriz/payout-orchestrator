@@ -1,51 +1,73 @@
-package handlers
+package httpjson
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func TestWriteJSON(t *testing.T) {
+// checkJSONHeader stops the test unless rec carries wantStatus and a JSON Content-Type.
+func checkJSONHeader(t *testing.T, rec *httptest.ResponseRecorder, wantStatus int) {
+	t.Helper()
+
+	// The response must carry the expected status.
+	if rec.Code != wantStatus {
+		t.Fatalf("status = %d, want %d", rec.Code, wantStatus)
+	}
+
+	// The response must be declared as JSON.
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", ct)
+	}
+}
+
+func TestWrite(t *testing.T) {
 	// --- Arrange ---
 	// Use a recorder to capture the response in memory.
 	rec := httptest.NewRecorder()
 
 	// --- Act ---
 	// Write a small payload with a non-default status.
-	err := writeJSON(rec, http.StatusCreated, map[string]string{"id": "42"})
+	err := Write(rec, http.StatusCreated, map[string]string{"id": "42"})
 
 	// --- Assert ---
 	// Encoding a plain map must not fail.
 	if err != nil {
-		t.Fatalf("writeJSON: %v", err)
+		t.Fatalf("Write: %v", err)
 	}
 
-	// The response must carry the given status, the JSON header and the payload.
-	body := decodeJSONResponse[map[string]string](t, rec, http.StatusCreated)
+	// The response must carry the given status and the JSON header.
+	checkJSONHeader(t, rec, http.StatusCreated)
+
+	// The body must hold the payload.
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
 	if body["id"] != "42" {
 		t.Errorf(`body["id"] = %q, want "42"`, body["id"])
 	}
 }
 
-func TestWriteJSONUnencodable(t *testing.T) {
+func TestWriteUnencodable(t *testing.T) {
 	// --- Arrange ---
 	// Use a recorder to capture the response in memory.
 	rec := httptest.NewRecorder()
 
 	// --- Act ---
 	// Pass a channel, which encoding/json cannot encode.
-	err := writeJSON(rec, http.StatusOK, make(chan int))
+	err := Write(rec, http.StatusOK, make(chan int))
 
 	// --- Assert ---
 	// The encoding error must reach the caller so it can log it.
 	if err == nil {
-		t.Fatal("writeJSON returned nil, want an encoding error")
+		t.Fatal("Write returned nil, want an encoding error")
 	}
 }
 
-func TestReadJSON(t *testing.T) {
+func TestRead(t *testing.T) {
 	// --- Arrange ---
 	// Declare the shape the handler expects.
 	var dst struct {
@@ -58,12 +80,12 @@ func TestReadJSON(t *testing.T) {
 
 	// --- Act ---
 	// Decode the body into dst.
-	err := readJSON(req, &dst)
+	err := Read(req, &dst)
 
 	// --- Assert ---
 	// A well-formed body must decode without error.
 	if err != nil {
-		t.Fatalf("readJSON: %v", err)
+		t.Fatalf("Read: %v", err)
 	}
 
 	// Each field must hold the value sent in the body.
@@ -72,9 +94,9 @@ func TestReadJSON(t *testing.T) {
 	}
 }
 
-func TestReadJSONRejectsBadBodies(t *testing.T) {
+func TestReadRejectsBadBodies(t *testing.T) {
 	// --- Arrange ---
-	// List bodies that readJSON must refuse, each with the reason it is bad.
+	// List bodies that Read must refuse, each named for the reason it is bad.
 	tests := []struct {
 		name string
 		body string
@@ -100,12 +122,12 @@ func TestReadJSONRejectsBadBodies(t *testing.T) {
 
 			// --- Act ---
 			// Try to decode the body.
-			err := readJSON(req, &dst)
+			err := Read(req, &dst)
 
 			// --- Assert ---
 			// The bad body must be refused.
 			if err == nil {
-				t.Fatal("readJSON returned nil, want an error")
+				t.Fatal("Read returned nil, want an error")
 			}
 		})
 	}

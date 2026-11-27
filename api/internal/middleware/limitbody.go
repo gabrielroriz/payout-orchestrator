@@ -1,19 +1,23 @@
 // Package middleware holds HTTP middleware shared by every route.
 package middleware
 
-import "net/http"
+import (
+	"net/http"
 
-// LimitBody caps every request body at maxBytes. A request whose declared
-// Content-Length is already over the limit gets 413 without its body being read.
-// Any other body is wrapped so reading past the limit fails with *http.MaxBytesError.
+	"github.com/gabrielroriz/payout-orchestrator/api/internal/httpjson"
+)
+
+// LimitBody caps every request body at maxBytes.
 func LimitBody(maxBytes int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Reject a body that declares it is too large up front, without reading it.
 			if r.ContentLength > maxBytes {
-				http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+				httpjson.Error(w, http.StatusRequestEntityTooLarge, httpjson.CodeBodyTooLarge, "request body too large")
 				return
 			}
 
+			// Cap any other body, so reading past the limit fails with *http.MaxBytesError.
 			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 			next.ServeHTTP(w, r)
 		})

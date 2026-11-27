@@ -13,8 +13,8 @@ func discardLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// decodeJSONResponse checks that rec holds a JSON response with wantStatus and
-// returns its body decoded into a T. It stops the test on any mismatch.
+// decodeJSONResponse checks that rec holds a JSON response with wantStatus and returns its body decoded into a T.
+// It stops the test on any mismatch.
 func decodeJSONResponse[T any](t *testing.T, rec *httptest.ResponseRecorder, wantStatus int) T {
 	t.Helper()
 

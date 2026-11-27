@@ -9,15 +9,13 @@ import (
 	"testing"
 )
 
-// captureLogger returns a JSON logger that writes into the returned buffer,
-// so a test can decode the line the middleware logged.
+// captureLogger returns a JSON logger that writes into the returned buffer, so a test can decode the line the middleware logged.
 func captureLogger() (*slog.Logger, *bytes.Buffer) {
 	var buf bytes.Buffer
 	return slog.New(slog.NewJSONHandler(&buf, nil)), &buf
 }
 
-// decodeLogLine decodes the single JSON log line in buf, stopping the test if
-// it is missing or malformed.
+// decodeLogLine decodes the single JSON log line in buf, stopping the test if it is missing or malformed.
 func decodeLogLine(t *testing.T, buf *bytes.Buffer) map[string]any {
 	t.Helper()
 
@@ -130,5 +128,24 @@ func TestLogRequestsServerErrorLevel(t *testing.T) {
 	// A server error must be logged at error level.
 	if got := decodeLogLine(t, buf)["level"]; got != "ERROR" {
 		t.Errorf("level = %v, want ERROR", got)
+	}
+}
+
+func TestLogRequestsIncludesRequestID(t *testing.T) {
+	// --- Arrange ---
+	// Put RequestID in front, as the router does, with a fixed client ID.
+	logger, buf := captureLogger()
+	h := RequestID(LogRequests(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(RequestIDHeader, "req-7")
+
+	// --- Act ---
+	// Send the request through both middleware.
+	h.ServeHTTP(httptest.NewRecorder(), req)
+
+	// --- Assert ---
+	// The log line must carry the request ID.
+	if got := decodeLogLine(t, buf)["request_id"]; got != "req-7" {
+		t.Errorf("request_id = %v, want req-7", got)
 	}
 }

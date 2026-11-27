@@ -9,12 +9,10 @@ import (
 	"testing"
 )
 
-// plainWriter is a ResponseWriter with only the three interface methods, so it
-// supports neither flushing nor hijacking.
+// plainWriter is a ResponseWriter with only the three interface methods, so it supports neither flushing nor hijacking.
 type plainWriter struct{ http.ResponseWriter }
 
-// errHijacked is what the fake writers return from Hijack, so a test can tell
-// the call reached them.
+// errHijacked is what the fake writers return from Hijack, so a test can tell the call reached them.
 var errHijacked = errors.New("hijack reached the original writer")
 
 // hijackOnlyWriter is a ResponseWriter that can be hijacked but not flushed.
@@ -25,8 +23,8 @@ func (hijackOnlyWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, errHijacked
 }
 
-// flushHijackWriter is a ResponseWriter that can flush and be hijacked, like
-// net/http's HTTP/1 writer. Flush comes from the embedded recorder.
+// flushHijackWriter is a ResponseWriter that can flush and be hijacked, like net/http's HTTP/1 writer.
+// Flush comes from the embedded recorder.
 type flushHijackWriter struct{ *httptest.ResponseRecorder }
 
 // Hijack returns errHijacked instead of a real connection.
@@ -121,8 +119,7 @@ func TestWrappedWriterUnwrap(t *testing.T) {
 
 func TestWrappedWriterKeepsOptionalFeatures(t *testing.T) {
 	// --- Arrange ---
-	// List original writers with different optional features, and which
-	// features the wrapped writer must expose for each.
+	// List original writers with different optional features, and which features the wrapped writer must expose for each.
 	tests := []struct {
 		name                string
 		inner               http.ResponseWriter
@@ -218,5 +215,56 @@ func TestWrappedWriterHijack(t *testing.T) {
 				t.Errorf("Hijack() error = %v, want errHijacked", err)
 			}
 		})
+	}
+}
+
+func TestWrappedWriterHeaderSent(t *testing.T) {
+	// --- Arrange ---
+	// List the calls a handler makes and whether the header has gone out after them.
+	tests := []struct {
+		name  string
+		write func(w http.ResponseWriter)
+		want  bool
+	}{
+		{"nothing written", func(w http.ResponseWriter) {}, false},
+		{"headers only edited", func(w http.ResponseWriter) { w.Header().Set("X-A", "1") }, false},
+		{"interim 1xx only", func(w http.ResponseWriter) { w.WriteHeader(http.StatusEarlyHints) }, false},
+		{"WriteHeader", func(w http.ResponseWriter) { w.WriteHeader(http.StatusOK) }, true},
+		{"Write", func(w http.ResponseWriter) { w.Write([]byte("hi")) }, true},
+		{"Flush", func(w http.ResponseWriter) { w.(http.Flusher).Flush() }, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// --- Arrange ---
+			// Wrap a recorder, which can flush.
+			ww := WrapWriter(httptest.NewRecorder())
+
+			// --- Act ---
+			// Make the handler's calls on the wrapped writer.
+			tt.write(ww)
+
+			// --- Assert ---
+			// HeaderSent must match whether the status has gone out.
+			if got := ww.HeaderSent(); got != tt.want {
+				t.Errorf("HeaderSent() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWrapWriterReusesExistingWrapper(t *testing.T) {
+	// --- Arrange ---
+	// Wrap a recorder once, as the first middleware would.
+	first := WrapWriter(httptest.NewRecorder())
+
+	// --- Act ---
+	// Wrap the already-wrapped writer again, as a later middleware would.
+	second := WrapWriter(first)
+
+	// --- Assert ---
+	// The same wrapper must come back, so both middleware share one status.
+	if second != first {
+		t.Error("WrapWriter returned a new wrapper, want the existing one")
 	}
 }

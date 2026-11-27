@@ -18,9 +18,24 @@ func New(cfg config.Config, logger *slog.Logger) http.Handler {
 
 	mux.HandleFunc("GET /v1/healthcheck", handlers.Healthcheck(cfg.Env, cfg.Version, logger))
 
-	// Logging wraps everything else, so responses written by other middleware are logged too.
-	var h http.Handler = mux
+	return withMiddleware(jsonFallbacks(mux), logger)
+}
+
+// withMiddleware wraps h in the middleware every request goes through.
+func withMiddleware(h http.Handler, logger *slog.Logger) http.Handler {
+	// Each wrap goes around the previous one, so a request meets them from the bottom up.
+
+	// Cap body size closest to the handlers that read bodies.
 	h = middleware.LimitBody(maxRequestBodyBytes)(h)
+
+	// Turn a panic anywhere below into a 500.
+	h = middleware.Recover(logger)(h)
+
+	// Log every response from below, including the 500 that Recover sends.
 	h = middleware.LogRequests(logger)(h)
+
+	// Assign the request ID first, so every step below can log it.
+	h = middleware.RequestID(h)
+
 	return h
 }
