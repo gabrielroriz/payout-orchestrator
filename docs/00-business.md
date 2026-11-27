@@ -2,45 +2,41 @@
 
 | | |
 | --- | --- |
-| **Status** | Draft v0.2 (open for review) |
+| **Status** | Draft v0.3 (open for review) |
 | **Author** | Gabriel Roriz |
-| **Updated** | 2026-11-23 |
+| **Updated** | 2026-11-27 |
 | **Next** | [Scope](01-scope.md) · [Design](02-design.md) |
 
 ## 1. In one sentence
 
-Payout Orchestrator lets a company pay many people for their results, by sending performance events and rules to one API, without building payments infrastructure.
+Payout Orchestrator lets a creator platform pay its creators for views, posts and campaigns, by sending post events and program rules to one API, without building payments infrastructure.
 
 ## 2. The customer
 
-Our customer (the **tenant**) is a company that pays many people based on results rather than hours.
+Our customer (the **tenant**) is a creator or influencer platform.
 
-| Segment | Who gets paid | Paid for |
-| --- | --- | --- |
-| Creator and influencer platforms | Creators | Views, posts, campaigns |
-| Affiliate and referral programs | Affiliates, referrers | Conversions, sign-ups |
-| Gig and delivery marketplaces | Couriers, workers | Deliveries, completed jobs |
-| Loyalty and cashback apps | End customers | Purchases, visits, milestones |
-| AI agent marketplaces | Agent operators | Completed tasks |
+| Who gets paid | Paid for |
+| --- | --- |
+| Creators | Views, posts, campaigns |
 
-**First target: creator platforms.** They pay fewer, larger and more international payouts. That plays to our strengths: multi-provider coverage and failover. Consumer cashback, with millions of small payouts, comes later.
+Creator platforms pay fewer, larger and more international payouts than most performance programs. That plays to our strengths: multi-provider coverage and failover.
 
 Within the tenant, three groups use the product:
 
-- **Marketing / growth** designs the programs: what is rewarded, and how much.
-- **Engineering** integrates the API: it sends events and handles webhooks.
+- **Growth / creator partnerships** designs the programs: what is rewarded, and how much.
+- **Engineering** integrates the API: it sends post events and metrics, and handles webhooks.
 - **Finance / ops** funds the account, triggers payouts and reads statements.
 
-The people being paid (**payees**) are the tenant's users. They never deal with us directly.
+The creators being paid (**payees**) are the tenant's users. They never deal with us directly.
 
 ## 3. The problem
 
 Without us, a tenant has to build all of this:
 
-1. **Calculating what people are owed.** Code that turns activity into amounts, and stays correct when events arrive duplicated, late or refunded.
-2. **Reaching people everywhere.** Each payout provider covers only some countries, currencies and methods, so a global program needs several integrations.
+1. **Calculating what creators are owed.** Code that turns views and posts into amounts, and stays correct when metrics arrive duplicated, late or out of order, and when posts are removed for fraud.
+2. **Reaching creators everywhere.** Each payout provider covers only some countries, currencies and methods, so a global creator base needs several integrations.
 3. **Surviving provider failures.** When a provider is down or times out, payouts stall or risk being sent twice.
-4. **Keeping the books.** Finance needs an audit trail from every payment back to the activity that earned it.
+4. **Keeping the books.** Finance needs an audit trail from every payment back to the posts and metrics that earned it.
 
 That is months of payments engineering, unrelated to the tenant's product, and expensive to get wrong.
 
@@ -48,14 +44,14 @@ That is months of payments engineering, unrelated to the tenant's product, and e
 
 | Tenant need | What we provide |
 | --- | --- |
-| Launch incentive programs quickly | Programs configured through the API, from a set of rule building blocks |
-| Pay the right amount | Exact money math, with duplicates, late events and refunds handled automatically |
-| Pay people anywhere | One API in front of several payout providers |
+| Launch creator programs quickly | Programs configured through the API, from a set of rule building blocks |
+| Pay the right amount | Exact money math, with duplicate and late metrics, and removed posts, handled automatically |
+| Pay creators anywhere | One API in front of several payout providers |
 | Never stall, never pay twice | Automatic failover between providers, safe against duplicates |
 | Satisfy finance and audit | A double-entry ledger, statements, and full lineage from payout to event |
 | Stay informed | Signed webhooks for earnings and payouts |
 
-We **do not** hold funds or move money ourselves (licensed providers do, on our instructions), run KYC or tax reporting (these plug in), or track performance (the tenant sends us events).
+What we deliberately leave out is listed in the [scope's non-goals](01-scope.md#2-goals-and-non-goals).
 
 ## 5. How it works for a tenant
 
@@ -65,7 +61,7 @@ Example: *ClipCo*, a fictional creator platform, pays creators $2 for every 1,00
 2. **ClipCo's engineers create the program** through our API. We validate it against the platform limits; there is no manual approval from us.
 3. **A creator joins** from inside ClipCo. ClipCo registers the creator with us as a payee and enrolls them in the program.
 4. **ClipCo sends view counts** as events. We apply the rule and record what each creator earned, first as `pending`.
-5. **The program's window closes** (for example, the week ends). Earnings become `available`, after a grace period for late events and refunds.
+5. **The program's window closes** (for example, the week ends). Earnings become `available`, after a grace period for late metrics and removed posts.
 6. **ClipCo's finance team funds one account** and pays out, by clicking a button or on the program's schedule.
 7. **We pay each creator** through the best provider for their country and method, exactly once, and notify ClipCo.
 
@@ -76,7 +72,7 @@ Creators see only ClipCo. We are the engine underneath, the way a payment proces
 | The tenant decides | The platform enforces |
 | --- | --- |
 | Which programs to run, and their terms (thresholds, rates, caps, windows) | Programs are built only from a fixed set of rule building blocks |
-| Which of their users join each program | Caps and budgets are required, and usage limits apply per tenant |
+| Which creators join each program | Caps and budgets are required, and usage limits apply per tenant |
 | When to pay out: on demand, or on the program's schedule | Payees must be verified, and the funding balance must cover the payout |
 | Their routing preferences (cost or speed) | Payouts go only through providers that support the route |
 
@@ -89,7 +85,7 @@ For logic the building blocks cannot express, tenants can calculate amounts them
 | Build in-house | Months of payments work, plus ongoing maintenance and risk |
 | Use one provider's bulk payout API directly | No rules engine or ledger, gaps in coverage, and stuck when that provider fails |
 | Spreadsheets and manual payouts | Doesn't scale, error-prone, no audit trail |
-| Performance-payroll platforms, such as [Grade](https://www.usegrade.com/) | The category this project belongs to. Our focus is the engine: exact amounts, no duplicate payouts, and no single-provider dependency |
+| Performance-payroll platforms, such as [Grade](https://www.usegrade.com/) | The category this project belongs to. Our focus is the engine for creator payouts: exact amounts, no duplicate payouts, and no single-provider dependency |
 
 ## 8. Funding
 
@@ -99,7 +95,7 @@ The tenant funds **one account**, held with a licensed partner, not with us. We 
 - Failover works without the tenant prefunding every provider.
 - We never hold funds: we only send instructions.
 
-We do **record** the balance in our ledger. It goes up when a deposit is confirmed and down when a payout is paid. Before sending any payout, we check that the balance covers it.
+We do **record** the balance in our ledger, and check it before sending any payout.
 
 **Example.** ClipCo deposits $50,000, but its 3,000 creators earned $62,000 this week after a viral video.
 
@@ -130,20 +126,22 @@ The program sets the default schedule, and the tenant can always pay on demand o
 | Payouts stalled by a single provider outage | Zero |
 | Payouts that need manual reconciliation | < 0.1% |
 
-## 12. Decisions
+## 12. Possible future segments
 
-| Topic | Decision |
-| --- | --- |
-| First segment | Creator platforms |
-| Funding | One funding account per tenant, feeding each provider |
-| Funding balance | Recorded in our ledger and checked before every payout. Not held by us |
-| Payout timing | On demand (MVP), plus a schedule per program (later) |
-| Pricing | Per successful payout, tiered by volume |
-| Program flexibility | Rule building blocks, plus a direct-earnings API |
+Other companies also pay people for results, and could reuse the same ledger, payouts and routing, with new rule building blocks. They are out of scope for now.
+
+| Segment | Who gets paid | Paid for |
+| --- | --- | --- |
+| Affiliate and referral programs | Affiliates, referrers | Conversions, sign-ups |
+| Gig and delivery marketplaces | Couriers, workers | Deliveries, completed jobs |
+| Loyalty and cashback apps | End customers | Purchases, visits, milestones |
+| AI agent marketplaces | Agent operators | Completed tasks |
+
+Consumer cashback, with millions of small payouts, would need a different cost and capacity profile than creator payouts.
 
 ## 13. Open questions
 
 1. Which licensed partner holds the funding account, and how fast can it top up each provider?
 2. What volume tiers and price per payout?
-3. Which creator-platform metrics come first: views, posts or campaigns?
+3. Which creator metrics come first: views, posts or campaigns?
 4. Should a program be able to pay each earning as soon as it is available, instead of in cycles?

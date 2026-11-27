@@ -2,9 +2,9 @@
 
 | | |
 | --- | --- |
-| **Status** | Draft v0.4 (open for review) |
+| **Status** | Draft v0.5 (open for review) |
 | **Author** | Gabriel Roriz |
-| **Updated** | 2026-11-23 |
+| **Updated** | 2026-11-27 |
 | **See also** | [Business](00-business.md) · [Scope](01-scope.md) |
 
 How the system meets the [scope](01-scope.md). `FR-xx` and `NFR-xx` refer to that document.
@@ -13,7 +13,7 @@ How the system meets the [scope](01-scope.md). `FR-xx` and `NFR-xx` refer to tha
 
 ```mermaid
 flowchart LR
-    tenant(["Tenant platform"])
+    tenant(["Creator platform"])
     providers(["Wise · PayPal · Simulator · …"])
 
     subgraph orchestrator["Payout Orchestrator"]
@@ -68,7 +68,7 @@ Payloads are versioned Protobuf, checked with `buf breaking` in CI.
 
 ## 3. Rules engine
 
-The first version supports **creator programs only**, since creator platforms are the first segment (see [business](00-business.md)). Other segments, such as cashback or affiliates, come later and reuse the same engine with new building blocks.
+The engine runs **creator programs**: it pays creators for their posts and the views those posts get.
 
 Programs are data, with [CEL](https://github.com/google/cel-go) filters, so changing one needs no deploy.
 
@@ -79,8 +79,6 @@ Programs are data, with [CEL](https://github.com/google/cel-go) filters, so chan
 | `post.published` | A creator published a post (post id, platform, campaign, `published_at`) |
 | `post.metrics_snapshot` | The post's **cumulative** metrics at a point in time (views, likes, …) |
 | `post.removed` | The post was deleted or flagged as fraud |
-
-The tenant tracks the metrics and sends snapshots; we never read social platforms ourselves.
 
 ### Building blocks
 

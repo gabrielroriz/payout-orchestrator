@@ -19,36 +19,11 @@
 [![Amazon RDS](https://img.shields.io/badge/Amazon_RDS-4053D6?style=flat)](https://aws.amazon.com/rds/)
 [![Amazon EKS](https://img.shields.io/badge/Amazon_EKS-FF9900?style=flat)](https://aws.amazon.com/eks/)
 
-Pay people for results, exactly once, across many payout providers.
+Pay creators for their results, exactly once, across many payout providers.
 
-Payout Orchestrator is a backend for performance-based payouts. Tenants send raw performance events, such as a restaurant visit, a conversion or a delivery. Declarative rules turn those events into earnings, a double-entry ledger records every cent, and payouts are routed across several providers with failover that never pays anyone twice.
+Payout Orchestrator is a payouts backend for creator and influencer platforms. Platforms send what their creators achieve, such as a published post or a post's view count. Declarative rules turn those events into earnings, a double-entry ledger records every cent, and payouts are routed across several providers with failover that never pays anyone twice.
 
-> **Status:** design phase, no code yet. The [scope](docs/01-scope.md) and [design](docs/02-design.md) are first drafts, open for review.
-
-## Why
-
-More and more companies pay for results instead of hours: creators per view, affiliates per conversion, customers per loyalty milestone. They need the amounts to be exact and every payout to happen exactly once, even when events are duplicated or refunded and providers fail. See the [business definition](docs/00-business.md).
-
-## What it does
-
-- **Event ingest:** a REST API, one event at a time or in batches, idempotent on a client-supplied `event_id`.
-- **Rules engine:** declarative, versioned programs with filters, windows, thresholds, tiers and caps. Reversals and late events become adjustments, never edits to history.
-- **Ledger:** an append-only, double-entry journal that is the single source of truth for balances.
-- **Payouts:** an explicit state machine, an `Idempotency-Key` on every mutating call, and a gate that blocks payees who are not verified or tenants without funds.
-- **Routing:** per-tenant policies by country, currency and method. Payouts fail over automatically on a definitive rejection, and an ambiguous outcome is resolved before anything is sent elsewhere.
-- **Notifications and operations:** signed webhooks to tenants, reconciliation against provider reports, and replay of failed messages.
-
-It does **not** hold funds or transmit money (licensed providers do that, on its instructions), run KYC or tax reporting (these plug in through an interface), or track performance itself (events arrive through the API).
-
-## Guarantees
-
-Zero duplicate payouts, no single-provider dependency, and full lineage from every payout back to its events and rule version.
-
-## Architecture
-
-A set of Go services that talk over Kafka. Events flow from the `api` through the `rules-engine` into the `ledger`. Payouts flow from `payouts` through the `dispatcher`, which owns routing, provider adapters, rate limits and circuit breakers. Postgres holds the ledger and every balance, and Kafka carries replayable facts between services, published through a transactional outbox and consumed idempotently.
-
-All services live in one Go module and can run as a single process in development. The [design doc](docs/02-design.md) has the full diagram, Kafka topics, payout state machine and key decisions.
+> **Status:** design phase, no code yet. The [documentation](#documentation) is a first draft, open for review.
 
 ## Tech stack
 
@@ -69,7 +44,7 @@ All services live in one Go module and can run as a single process in developmen
 | **M0** Foundations | `make up` starts the stack, and a test event flows end to end in a single trace |
 | **M1** Money core | Fund the account → pay a payee → receive a signed webhook, with the ledger balanced. An unfunded payout is blocked, never sent |
 | **M2** Orchestration | Kill a provider in the middle of a 100k batch: 0 duplicates, 0 lost |
-| **M3** Performance engine | 10 restaurant visits, with duplicates, out-of-order events and one refund → exactly 5% cashback paid |
+| **M3** Performance engine | A post's view snapshots, with duplicates, out-of-order snapshots and a final removal → exactly $2 per 1,000 views accrued, capped at $500, then clawed back |
 | **M4** Production-grade | Latency and throughput targets met under load, a clean reconciliation report, Terraform for AWS |
 
 ## Getting started
@@ -78,9 +53,9 @@ There is nothing to run yet. From M0, the full stack (Kafka, Postgres, Grafana a
 
 ## Documentation
 
-- [Business definition](docs/00-business.md): customer, problem, offer, how a tenant uses it, and the business model.
-- [Project scope](docs/01-scope.md): problem, goals and non-goals, and requirements.
-- [Design](docs/02-design.md): architecture, Kafka topics, rules engine, payout state machine, key decisions and capacity.
+- [Business definition](docs/00-business.md): why it exists. The customer, the problem, the offer, how a tenant uses it, the business model, and possible future segments.
+- [Project scope](docs/01-scope.md): what it must do. Goals and non-goals, and requirements.
+- [Design](docs/02-design.md): how it does it. Architecture, Kafka topics, rules engine, payout state machine, key decisions and capacity.
 
 ## License
 
