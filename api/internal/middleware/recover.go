@@ -13,7 +13,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Wrap the writer to learn whether the response has started; this reuses LogRequests' wrapper.
-			ww := WrapWriter(w)
+			ww := wrap(w, r)
 
 			// Catch a panic on the way out; without this, net/http drops the connection and the client gets no answer.
 			defer func() {
@@ -38,7 +38,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 
 				// If the response has started, the status can no longer change.
 				// Abort it, so the client sees a broken response instead of a cut-off one that looks complete.
-				if ww.HeaderSent() {
+				if headerSent(ww) {
 					panic(http.ErrAbortHandler)
 				}
 

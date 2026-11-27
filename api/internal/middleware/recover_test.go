@@ -182,7 +182,8 @@ func TestRecoverReusesWrappedWriter(t *testing.T) {
 	// --- Arrange ---
 	// Wrap the writer up front, as LogRequests does.
 	logger, _ := captureLogger()
-	ww := WrapWriter(httptest.NewRecorder())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	ww := wrap(httptest.NewRecorder(), req)
 
 	// Wrap a handler that records the writer it receives.
 	var got http.ResponseWriter
@@ -192,11 +193,11 @@ func TestRecoverReusesWrappedWriter(t *testing.T) {
 
 	// --- Act ---
 	// Send a request through the middleware with the already-wrapped writer.
-	h.ServeHTTP(ww, httptest.NewRequest(http.MethodGet, "/", nil))
+	h.ServeHTTP(ww, req)
 
 	// --- Assert ---
 	// The handler must receive that same writer, not a second wrapper.
 	if got != ww {
-		t.Error("handler got a new wrapper, want the existing WrappedWriter")
+		t.Error("handler got a new wrapper, want the existing wrapper")
 	}
 }
